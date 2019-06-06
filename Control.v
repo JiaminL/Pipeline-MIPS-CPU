@@ -111,7 +111,7 @@ module Control_Unit(
             endcase
         else
             case(Opcode)
-                ADDI, ADDIU, ANDI, ORI, XORI, LUI, LW, SLTI, SLTIU:
+                ADDI, ADDIU, ANDI, ORI, XORI, LUI, LW, SLTI, SLTIU, JAL:
                     RegWrite <= 1'b1;
                 default:    RegWrite <= 1'b0;
             endcase

@@ -23,12 +23,14 @@
 module ID_EX_Reg(
     input clk, clr, rst,
     input ID_RegWrite, ID_MemtoReg, ID_MemWrite, ID_ALUSrc, ID_RegDst,
+    input [2:0] ID_JumpBranch,
     input [3:0] ID_ALUOp,
-    input [31:0] ID_rsData, ID_rtData, ID_ExtImm,
+    input [31:0] ID_rsData, ID_rtData, ID_ExtImm, ID_NPC,
     input [4:0] ID_rsAddr, ID_rtAddr, ID_rdAddr, ID_Shamt,
     output reg EX_RegWrite, EX_MemtoReg, EX_MemWrite, EX_ALUSrc, EX_RegDst,
+    output reg [2:0] EX_JumpBranch,
     output reg [3:0] EX_ALUOp,
-    output reg [31:0] EX_rsData, EX_rtData, EX_ExtImm,
+    output reg [31:0] EX_rsData, EX_rtData, EX_ExtImm, EX_NPC,
     output reg [4:0] EX_rsAddr, EX_rtAddr, EX_rdAddr, EX_Shamt
     );
         
@@ -41,6 +43,7 @@ module ID_EX_Reg(
         else if(clr)    // Synchronous
             begin
                 EX_RegWrite <= 0;
+                EX_MemtoReg <= 0;
                 EX_MemWrite <= 0;
             end
         else
@@ -51,8 +54,10 @@ module ID_EX_Reg(
                 EX_ALUSrc <= ID_ALUSrc;
                 EX_RegDst <= ID_RegDst;
                 EX_ALUOp <= ID_ALUOp;
+                EX_JumpBranch <= ID_JumpBranch;
                 EX_rsData <= ID_rsData;
                 EX_rtData <= ID_rtData;
+                EX_NPC <= ID_NPC;
                 EX_ExtImm <= ID_ExtImm;
                 EX_rsAddr <= ID_rsAddr;
                 EX_rtAddr <= ID_rtAddr;

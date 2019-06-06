@@ -22,17 +22,17 @@
 
 module PIPELINE_CPU(
     input clk, rst,
-    input [15:0] SW,
-    output [15:0] LED
-//    input [31:0] Show_IM_Addr, Show_DM_Addr,
-//    input [4:0] Show_RF_Addr,
-//    output [31:0] Show_PC, Show_IM_Data, Show_DM_Data, Show_RF_Data
+//    input [15:0] SW,
+//    output [15:0] LED
+    input [31:0] Show_IM_Addr, Show_DM_Addr,
+    input [4:0] Show_RF_Addr,
+    output [31:0] Show_PC, Show_IM_Data, Show_DM_Data, Show_RF_Data
     );
-    wire [31:0] Show_IM_Addr, Show_DM_Addr;
-    wire [4:0] Show_RF_Addr;
-    wire [31:0] Show_PC, Show_IM_Data, Show_DM_Data, Show_RF_Data;
-    assign Show_DM_Addr = SW;
-    assign LED = Show_DM_Data;
+//    wire [31:0] Show_IM_Addr, Show_DM_Addr;
+//    wire [4:0] Show_RF_Addr;
+//    wire [31:0] Show_PC, Show_IM_Data, Show_DM_Data, Show_RF_Data;
+//    assign Show_DM_Addr = SW;
+//    assign LED = Show_DM_Data;
     
     // IF
     wire [1:0] ID_PCSrc;
@@ -92,7 +92,7 @@ module PIPELINE_CPU(
     wire [2:0] ID_JumpBranch;
     wire [3:0] ID_ALUOp;
     wire ID_SignExtend, ID_RegWrite, ID_MemtoReg, ID_MemWrite, ID_ALUSrc, ID_RegDst;
-    wire ID_Jal, ID_Equ;
+    wire ID_Equ;
     
     Control_Unit Control_Unit(
         .Opcode(ID_Opcode), .func(ID_Func),    // input
@@ -102,43 +102,32 @@ module PIPELINE_CPU(
     ); 
     Jump_Unit Jump_Unit(
         .JumpBranch(ID_JumpBranch), .Equ(ID_Equ),    // input
-        .Jal(ID_Jal), .ID_Flush(ID_Flush), .PCSrc(ID_PCSrc)    //output
+        .ID_Flush(ID_Flush), .PCSrc(ID_PCSrc)    //output
     );
     
     // Register File
     wire WB_RegWrite;
-    wire ID_RF_we = WB_RegWrite | ID_Jal;
-    wire [4:0] ID_RF_WAddr, WB_wrAddr;
-    wire [31:0] ID_RF_WData, ID_rsData, ID_rtData, WB_Data;
+    wire [4:0] WB_wrAddr;
+    wire [31:0] ID_rsData, ID_rtData, WB_Data;
     
-    MUX2 #(5) RF_WAddr_MUX(
-        .data0(WB_wrAddr), .data1(5'd31),   //input
-        .s(ID_Jal),
-        .out(ID_RF_WAddr)
-    );
-     MUX2 #(32) RF_WData_MUX(
-        .data0(WB_Data), .data1(ID_NPC),   //input
-        .s(ID_Jal),
-        .out(ID_RF_WData)
-    );
     RegFile RF(
-        .clk(clk), .rst(rst), .RegWrite(ID_RF_we),    // input
+        .clk(clk), .rst(rst), .RegWrite(WB_RegWrite),    // input
         .radd1(ID_rsAddr), .radd2(ID_rtAddr), .radd3(Show_RF_Addr),    // input 
-        .wadd(ID_RF_WAddr), .wdata(ID_RF_WData),    // input
+        .wadd(WB_wrAddr), .wdata(WB_Data),    // input
         .rdata1(ID_rsData), .rdata2(ID_rtData), .rdata3(Show_RF_Data)    // ouput
     );
     
     // Equ
-    wire [31:0] ID_Equ_In1, ID_Equ_In2, MEM_ALUOut;
+    wire [31:0] ID_Equ_In1, ID_Equ_In2, MEM_ALUorNPC;
     wire ID_Forward1, ID_Forward2;    // output from Bypath Unit
     
     MUX2 EquIn1_Mux(
-        .data0(ID_rsData), .data1(MEM_ALUOut),    // input
+        .data0(ID_rsData), .data1(MEM_ALUorNPC),    // input
         .s(ID_Forward1),    // input
         .out(ID_Equ_In1)    // output
     );
     MUX2 EquIn2_Mux(
-        .data0(ID_rtData), .data1(MEM_ALUOut),    // input
+        .data0(ID_rtData), .data1(MEM_ALUorNPC),    // input
         .s(ID_Forward2),    // input
         .out(ID_Equ_In2)    // output
     );
@@ -179,33 +168,39 @@ module PIPELINE_CPU(
     //////////////////////////////////////////////////////////////////////////////////
     // ID/EX.Register
     wire EX_RegWrite, EX_MemtoReg, EX_MemWrite, EX_ALUSrc, EX_RegDst;
+    wire [2:0] EX_JumpBranch;
     wire [3:0] EX_ALUOp;
-    wire [31:0] EX_rsData, EX_rtData, EX_ExtImm;
+    wire [31:0] EX_rsData, EX_rtData, EX_ExtImm, EX_NPC;
     wire [4:0] EX_rsAddr, EX_rtAddr, EX_rdAddr, EX_Shamt;
     wire EX_Flush;    // output from Harzard Unit
     
     ID_EX_Reg ID_EX_REG(
         .clk(clk), .clr(EX_Flush), .rst(rst),    // input
         .ID_RegWrite(ID_RegWrite), .ID_MemtoReg(ID_MemtoReg), .ID_MemWrite(ID_MemWrite),    // input
-        .ID_ALUSrc(ID_ALUSrc), .ID_RegDst(ID_RegDst), .ID_ALUOp(ID_ALUOp),    // input
-        .ID_rsData(ID_rsData), .ID_rtData(ID_rtData), .ID_ExtImm(ID_ExtImm),    // input
+        .ID_ALUSrc(ID_ALUSrc), .ID_RegDst(ID_RegDst), .ID_ALUOp(ID_ALUOp), .ID_JumpBranch(ID_JumpBranch),    // input
+        .ID_rsData(ID_rsData), .ID_rtData(ID_rtData), .ID_NPC(ID_NPC), .ID_ExtImm(ID_ExtImm),    // input
         .ID_rsAddr(ID_rsAddr), .ID_rtAddr(ID_rtAddr), .ID_rdAddr(ID_rdAddr), .ID_Shamt(ID_Shamt),    // input
         .EX_RegWrite(EX_RegWrite), .EX_MemtoReg(EX_MemtoReg), .EX_MemWrite(EX_MemWrite),    // output
-        .EX_ALUSrc(EX_ALUSrc), .EX_RegDst(EX_RegDst), .EX_ALUOp(EX_ALUOp),    // output
-        .EX_rsData(EX_rsData), .EX_rtData(EX_rtData), .EX_ExtImm(EX_ExtImm),    // output
+        .EX_ALUSrc(EX_ALUSrc), .EX_RegDst(EX_RegDst), .EX_ALUOp(EX_ALUOp),.EX_JumpBranch(EX_JumpBranch),    // output
+        .EX_rsData(EX_rsData), .EX_rtData(EX_rtData), .EX_NPC(EX_NPC), .EX_ExtImm(EX_ExtImm),    // output
         .EX_rsAddr(EX_rsAddr), .EX_rtAddr(EX_rtAddr), .EX_rdAddr(EX_rdAddr), .EX_Shamt(EX_Shamt)    // output
     );
     
     
     //////////////////////////////////////////////////////////////////////////////////
     // EX
-    wire [31:0] EX_FinalRs, EX_FinalRt, EX_ALUin_A, EX_ALUin_B, EX_ALUOut;
+    wire [31:0] EX_FinalRs, EX_FinalRt, EX_ALUin_A, EX_ALUin_B, EX_ALUOut, EX_ALUorNPC;
     wire [4:0] EX_wrAddr;
     wire [1:0] EX_ForwardA, EX_ForwardB;
+    wire EX_Jal;
+    
+    IS_Jal IS_JAL(
+        .JumpBranch(EX_JumpBranch), .Jal(EX_Jal)
+    );
     
     // ALU input A
     MUX3or4 Rs_MUX(
-        .data0(EX_rsData), .data1(MEM_ALUOut), .data2(WB_Data),    // input
+        .data0(EX_rsData), .data1(MEM_ALUorNPC), .data2(WB_Data),    // input
         .s(EX_ForwardA),    // input
         .out(EX_FinalRs)    // output
     );
@@ -213,7 +208,7 @@ module PIPELINE_CPU(
     
     // ALU input B
     MUX3or4 Rt_MUX(
-        .data0(EX_rtData), .data1(MEM_ALUOut), .data2(WB_Data),    // input
+        .data0(EX_rtData), .data1(MEM_ALUorNPC), .data2(WB_Data),    // input
         .s(EX_ForwardB),    // input
         .out(EX_FinalRt)    // output
     );
@@ -228,11 +223,17 @@ module PIPELINE_CPU(
         EX_ALUin_A, EX_ALUin_B, EX_ALUOp, EX_Shamt,    // input
         EX_ALUOut    // output
     );
+    MUX2 ALU0rNPC_MUX(
+        .data0(EX_ALUOut), .data1(EX_NPC),
+        .s(EX_Jal),
+        .out(EX_ALUorNPC)
+    );
+    
     
     // Write Regester Address
-    MUX2 #(5) WRAddr_MUX(
-        .data0(EX_rtAddr), .data1(EX_rdAddr),    // input
-        .s(EX_RegDst),    // input
+    MUX3or4 #(5) WRAddr_MUX(
+        .data0(EX_rtAddr), .data2(EX_rdAddr), .data1(5'd31), .data3(5'd31),    // input
+        .s({EX_RegDst,EX_Jal}),    // input
         .out(EX_wrAddr)    // output
     );
     
@@ -241,16 +242,16 @@ module PIPELINE_CPU(
     // EX/MEM.Register
     wire MEM_RegWrite, MEM_MemtoReg, MEM_MemWrite;
     wire [31:0] MEM_wmData;
+    wire [2:0] MEM_JumpBranch;
     wire [4:0] MEM_rtAddr, MEM_wrAddr;
-    wire MEM_Flush;    // output from Hazard Unit
     wire [31:0] EX_wmData = EX_FinalRt;
     
     EX_MEM_Reg EX_MEM_REG(
-        .clk(clk), .clr(MEM_Flush), .rst(rst),    // input
-        .EX_RegWrite(EX_RegWrite), .EX_MemtoReg(EX_MemtoReg), .EX_MemWrite(EX_MemWrite), .EX_ALUOut(EX_ALUOut),    // input
-        .EX_wmData(EX_wmData), .EX_rtAddr(EX_rtAddr), .EX_wrAddr(EX_wrAddr),    // input
-        .MEM_RegWrite(MEM_RegWrite), .MEM_MemtoReg(MEM_MemtoReg), .MEM_MemWrite(MEM_MemWrite), .MEM_ALUOut(MEM_ALUOut),    // output
-        .MEM_wmData(MEM_wmData), .MEM_rtAddr(MEM_rtAddr), .MEM_wrAddr(MEM_wrAddr)    // output
+        .clk(clk), .rst(rst),    // input
+        .EX_RegWrite(EX_RegWrite), .EX_MemtoReg(EX_MemtoReg), .EX_MemWrite(EX_MemWrite), .EX_ALUorNPC(EX_ALUorNPC),    // input
+        .EX_JumpBranch(EX_JumpBranch), .EX_wmData(EX_wmData), .EX_rtAddr(EX_rtAddr), .EX_wrAddr(EX_wrAddr),    // input
+        .MEM_RegWrite(MEM_RegWrite), .MEM_MemtoReg(MEM_MemtoReg), .MEM_MemWrite(MEM_MemWrite), .MEM_ALUorNPC(MEM_ALUorNPC),    // output
+        .MEM_JumpBranch(MEM_JumpBranch), .MEM_wmData(MEM_wmData), .MEM_rtAddr(MEM_rtAddr), .MEM_wrAddr(MEM_wrAddr)    // output
     );
     
     
@@ -266,7 +267,7 @@ module PIPELINE_CPU(
     );
     DataMem DM(
         .clk(clk),    // input
-        .Addr32(MEM_ALUOut), .Show_Addr32(Show_DM_Addr),    // input
+        .Addr32(MEM_ALUorNPC), .Show_Addr32(Show_DM_Addr),    // input
         .WriteData(MEM_Final_WData), .MemWrite(MEM_MemWrite),    // input 
         .ReadData(MEM_MDR), .Show_Data(Show_DM_Data)    // output
     );
@@ -275,16 +276,15 @@ module PIPELINE_CPU(
     //////////////////////////////////////////////////////////////////////////////////
     // MEM/WB.Register
     wire WB_MemtoReg;
-    wire [31:0] WB_MDR, WB_ALUOut;
-    wire WB_Flush;    // output from Hazard Unit
+    wire [31:0] WB_MDR, WB_ALUorNPC;
     
     MEM_WB_Reg MEM_WB_REG(
-        .clk(clk), .clr(WB_Flush), .rst(rst),    // input
+        .clk(clk), .rst(rst),    // input
         .MEM_RegWrite(MEM_RegWrite), .MEM_MemtoReg(MEM_MemtoReg),    // input
-        .MEM_MDR(MEM_MDR), .MEM_ALUOut(MEM_ALUOut),    // input
+        .MEM_MDR(MEM_MDR), .MEM_ALUorNPC(MEM_ALUorNPC),    // input
         .MEM_wrAddr(MEM_wrAddr),    // input
         .WB_RegWrite(WB_RegWrite), .WB_MemtoReg(WB_MemtoReg),    // output
-        .WB_MDR(WB_MDR), .WB_ALUOut(WB_ALUOut),    // output
+        .WB_MDR(WB_MDR), .WB_ALUorNPC(WB_ALUorNPC),    // output
         .WB_wrAddr(WB_wrAddr)    // output
     );
     
@@ -292,7 +292,7 @@ module PIPELINE_CPU(
     //////////////////////////////////////////////////////////////////////////////////
     // WB
     MUX2 WBData_MUX(
-        .data0(WB_ALUOut), .data1(WB_MDR),    // input
+        .data0(WB_ALUorNPC), .data1(WB_MDR),    // input
         .s(WB_MemtoReg),    // input
         .out(WB_Data)    // output
     );
@@ -301,21 +301,22 @@ module PIPELINE_CPU(
     //////////////////////////////////////////////////////////////////////////////////
     // Harzard Unit
     Hazard_Unit Hazard_Unit(
-        .ID_Jal(ID_Jal), .ID_JumpBranch(ID_JumpBranch),    // input 
+        .ID_JumpBranch(ID_JumpBranch),    // input 
         .ID_RegWrite(ID_RegWrite), .ID_MemWrite(ID_MemWrite), .ID_MemtoReg(ID_MemtoReg),    // input
-        .EX_RegWrite(EX_RegWrite), .EX_MemWrite(EX_MemWrite), .EX_MemtoReg(EX_MemtoReg),    // input
+        .EX_RegWrite(EX_RegWrite), .EX_MemWrite(EX_MemWrite),    // input
+        .EX_MemtoReg(EX_MemtoReg), .EX_JumpBranch(EX_JumpBranch),    // input
         .MEM_RegWrite(MEM_RegWrite), .MEM_MemtoReg(MEM_MemtoReg),    // input
         .ID_rsAddr(ID_rsAddr), .ID_rtAddr(ID_rtAddr), .EX_wrAddr(EX_wrAddr), .MEM_wrAddr(MEM_wrAddr),    // input
-        .EX_Flush(EX_Flush), .MEM_Flush(MEM_Flush), .WB_Flush(WB_Flush),    // output
-        .IF_Stall(IF_Stall), .ID_Stall(ID_Stall)    // output
+        .EX_Flush(EX_Flush), .IF_Stall(IF_Stall), .ID_Stall(ID_Stall)    // output
     );
     
     //////////////////////////////////////////////////////////////////////////////////
     // Bypath Unit
     Bypath_Unit Bypath_Unit( 
         .ID_JumpBranch(ID_JumpBranch),    // input
-        .EX_RegWrite(EX_RegWrite), .EX_MemWrite(EX_MemWrite),    // input
-        .MEM_RegWrite(MEM_RegWrite), .MEM_MemWrite(MEM_MemWrite), .MEM_MemtoReg(MEM_MemtoReg),    // input
+        .EX_RegWrite(EX_RegWrite), .EX_MemWrite(EX_MemWrite), .EX_JumpBranch(EX_JumpBranch),    // input
+        .MEM_RegWrite(MEM_RegWrite), .MEM_MemWrite(MEM_MemWrite), 
+        .MEM_MemtoReg(MEM_MemtoReg), .MEM_JumpBranch(MEM_JumpBranch),    // input
         .WB_RegWrite(WB_RegWrite), .WB_MemtoReg(WB_MemtoReg),    // input
         .ID_rsAddr(ID_rsAddr), .ID_rtAddr(ID_rtAddr),    // input
         .EX_rsAddr(EX_rsAddr), .EX_rtAddr(EX_rtAddr),    // input

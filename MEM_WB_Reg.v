@@ -21,26 +21,24 @@
 
 
 module MEM_WB_Reg(
-    input clk, clr, rst,
+    input clk, rst,
     input MEM_RegWrite, MEM_MemtoReg,
-    input [31:0] MEM_MDR, MEM_ALUOut,
+    input [31:0] MEM_MDR, MEM_ALUorNPC,
     input [4:0] MEM_wrAddr,
     output reg WB_RegWrite, WB_MemtoReg,
-    output reg [31:0] WB_MDR, WB_ALUOut,
+    output reg [31:0] WB_MDR, WB_ALUorNPC,
     output reg [4:0] WB_wrAddr
     );
         
     always@ (posedge clk,posedge rst)
         if(rst)
             WB_RegWrite <= 0;
-        else if(clr)    // Synchronous
-            WB_RegWrite <= 0;
         else
             begin
                 WB_RegWrite <= MEM_RegWrite;
                 WB_MemtoReg <= MEM_MemtoReg;
                 WB_MDR <= MEM_MDR;
-                WB_ALUOut <= MEM_ALUOut;
+                WB_ALUorNPC <= MEM_ALUorNPC;
                 WB_wrAddr <= MEM_wrAddr;
             end    
     

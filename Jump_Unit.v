@@ -23,15 +23,11 @@
 module Jump_Unit(
     input [2:0] JumpBranch,
     input Equ,
-    output Jal, 
     output reg ID_Flush,
     output reg [1:0] PCSrc
     );
     
     parameter BEQ = 3'd1, BNE = 3'd2, JR = 3'd3, J = 3'd4, JAL = 3'd7, OTHERS = 3'd0;
-    
-    // Jal
-    assign Jal = (JumpBranch == JAL);
     
     // IR_Flush
     always @(*)
